@@ -13,8 +13,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from config import get_anti_truncation_max_attempts
 from log import log
-from src.utils import is_anti_truncation_model, authenticate_bearer, authenticate_gemini_flexible, authenticate_sdwebui_flexible
-
+from .utils import is_anti_truncation_model, authenticate_bearer, authenticate_gemini_flexible, authenticate_sdwebui_flexible, get_base_model_from_feature_model
 from .antigravity_api import (
     build_antigravity_request_body,
     send_antigravity_request_no_stream,
@@ -197,10 +196,16 @@ def openai_messages_to_antigravity_contents(messages: List[Any]) -> List[Dict[st
 
         # 处理 tool 消息
         elif role == "tool":
+            # 获取函数名称,确保不为空
+            func_name = getattr(msg, "name", None)
+            if not func_name:
+                # 如果没有提供名称,尝试从 tool_call_id 推断或使用默认值
+                func_name = f"function_{tool_call_id}" if tool_call_id else "unknown_function"
+
             parts = [{
                 "functionResponse": {
                     "id": tool_call_id,
-                    "name": getattr(msg, "name", "unknown"),
+                    "name": func_name,
                     "response": {"output": content}
                 }
             }]
@@ -340,6 +345,34 @@ def generate_generation_config(
     except Exception as e:
         log.warning(f"[ANTIGRAVITY] Failed to validate generation config: {e}, using dict directly")
         return config_dict
+
+
+def prepare_image_request(request_body: Dict[str, Any], model: str) -> Dict[str, Any]:
+    """图像生成模型请求体后处理"""
+    model_lower = model.lower()
+    
+    # 解析分辨率
+    image_size = "4K" if "-4k" in model_lower else "2K" if "-2k" in model_lower else None
+    
+    # 解析比例
+    aspect_ratio = "1:1"
+    for suffix, ratio in [("-21x9", "21:9"), ("-16x9", "16:9"), ("-9x16", "9:16"), ("-4x3", "4:3"), ("-3x4", "3:4")]:
+        if suffix in model_lower:
+            aspect_ratio = ratio
+            break
+    
+    # 构建 imageConfig
+    image_config = {"aspectRatio": aspect_ratio}
+    if image_size:
+        image_config["imageSize"] = image_size
+
+    request_body["requestType"] = "image_gen"
+    request_body["model"] = "gemini-3-pro-image"  # 统一使用基础模型名
+    request_body["request"]["generationConfig"] = {"candidateCount": 1, "imageConfig": image_config}
+    for key in ("systemInstruction", "tools", "toolConfig"):
+        request_body["request"].pop(key, None)
+    return request_body
+
 
 
 def convert_to_openai_tool_call(function_call: Dict[str, Any]) -> Dict[str, Any]:
@@ -492,6 +525,8 @@ async def convert_antigravity_stream_to_openai(
                 # 处理工具调用
                 elif "functionCall" in part:
                     tool_call = convert_to_openai_tool_call(part["functionCall"])
+                    # 在流式响应中,每个 tool_call 需要包含 index 字段
+                    tool_call["index"] = len(state["tool_calls"])
                     state["tool_calls"].append(tool_call)
 
             # 检查是否结束
@@ -860,6 +895,10 @@ async def chat_completions(
         generation_config=generation_config,
     )
 
+    # 图像生成模型特殊处理
+    if "-image" in model:
+        request_body = prepare_image_request(request_body, model)
+
     # 生成请求 ID
     request_id = f"chatcmpl-{int(time.time() * 1000)}"
 
@@ -1086,6 +1125,10 @@ async def gemini_generate_content(
         generation_config=generation_config,
     )
 
+    # 图像生成模型特殊处理
+    if "-image" in model:
+        request_body = prepare_image_request(request_body, model)
+
     # 发送非流式请求
     try:
         response_data, cred_name, cred_data = await send_antigravity_request_no_stream(
@@ -1134,7 +1177,6 @@ async def gemini_stream_generate_content(
     use_anti_truncation = is_anti_truncation_model(model)
     if use_anti_truncation:
         # 去掉 "流式抗截断/" 前缀
-        from src.utils import get_base_model_from_feature_model
         model = get_base_model_from_feature_model(model)
 
     # 模型名称映射
