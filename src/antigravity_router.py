@@ -240,9 +240,20 @@ def convert_openai_tools_to_antigravity(tools: Optional[List[Any]]) -> Optional[
     if not tools:
         return None
 
-    # 需要排除的字段
-    EXCLUDED_KEYS = {'$schema', 'additionalProperties', 'minLength', 'maxLength',
-                     'minItems', 'maxItems', 'uniqueItems'}
+    # 需要排除的字段 - 与 _clean_schema_for_gemini 保持一致
+    # Gemini/Antigravity API 不支持这些 JSON Schema 字段
+    # 参考: github.com/googleapis/python-genai/issues/699, #388, #460, #1122, #264, #4551
+    EXCLUDED_KEYS = {
+        '$schema', '$id', '$ref', '$defs', 'definitions',
+        'example', 'examples', 'readOnly', 'writeOnly', 'default',
+        'exclusiveMaximum', 'exclusiveMinimum',
+        'oneOf', 'anyOf', 'allOf', 'const',
+        'additionalItems', 'contains', 'patternProperties', 'dependencies',
+        'propertyNames', 'if', 'then', 'else',
+        'contentEncoding', 'contentMediaType',
+        'additionalProperties', 'minLength', 'maxLength',
+        'minItems', 'maxItems', 'uniqueItems'
+    }
 
     def clean_parameters(obj):
         """递归清理参数对象"""
@@ -355,14 +366,16 @@ def prepare_image_request(request_body: Dict[str, Any], model: str) -> Dict[str,
     image_size = "4K" if "-4k" in model_lower else "2K" if "-2k" in model_lower else None
     
     # 解析比例
-    aspect_ratio = "1:1"
-    for suffix, ratio in [("-21x9", "21:9"), ("-16x9", "16:9"), ("-9x16", "9:16"), ("-4x3", "4:3"), ("-3x4", "3:4")]:
+    aspect_ratio = None
+    for suffix, ratio in [("-21x9", "21:9"), ("-16x9", "16:9"), ("-9x16", "9:16"), ("-4x3", "4:3"), ("-3x4", "3:4"), ("-1x1", "1:1")]:
         if suffix in model_lower:
             aspect_ratio = ratio
             break
     
     # 构建 imageConfig
-    image_config = {"aspectRatio": aspect_ratio}
+    image_config = {}
+    if aspect_ratio:
+        image_config["aspectRatio"] = aspect_ratio
     if image_size:
         image_config["imageSize"] = image_size
 
@@ -372,6 +385,7 @@ def prepare_image_request(request_body: Dict[str, Any], model: str) -> Dict[str,
     for key in ("systemInstruction", "tools", "toolConfig"):
         request_body["request"].pop(key, None)
     return request_body
+
 
 
 
@@ -447,7 +461,7 @@ async def convert_antigravity_stream_to_openai(
             # 记录第一次成功响应
             if not state["success_recorded"]:
                 if credential_name and credential_manager:
-                    await credential_manager.record_api_call_result(credential_name, True, is_antigravity=True)
+                    await credential_manager.record_api_call_result(credential_name, True, mode="antigravity")
                 state["success_recorded"] = True
 
             # 解析 SSE 数据
@@ -724,7 +738,7 @@ async def convert_antigravity_stream_to_gemini(
             # 记录第一次成功响应
             if not success_recorded:
                 if credential_name and credential_manager:
-                    await credential_manager.record_api_call_result(credential_name, True, is_antigravity=True)
+                    await credential_manager.record_api_call_result(credential_name, True, mode="antigravity")
                 success_recorded = True
 
             # 解析 SSE 数据
@@ -876,7 +890,7 @@ async def chat_completions(
     generation_config = generate_generation_config(parameters, enable_thinking, actual_model)
 
     # 获取凭证信息（用于 project_id 和 session_id）
-    cred_result = await cred_mgr.get_valid_credential(is_antigravity=True)
+    cred_result = await cred_mgr.get_valid_credential(mode="antigravity")
     if not cred_result:
         log.error("当前无可用 antigravity 凭证")
         raise HTTPException(status_code=500, detail="当前无可用 antigravity 凭证")
@@ -1094,7 +1108,7 @@ async def gemini_generate_content(
     generation_config = generate_generation_config(parameters, enable_thinking, actual_model)
 
     # 获取凭证信息（用于 project_id 和 session_id）
-    cred_result = await cred_mgr.get_valid_credential(is_antigravity=True)
+    cred_result = await cred_mgr.get_valid_credential(mode="antigravity")
     if not cred_result:
         log.error("当前无可用 antigravity 凭证")
         raise HTTPException(status_code=500, detail="当前无可用 antigravity 凭证")
@@ -1211,7 +1225,7 @@ async def gemini_stream_generate_content(
     generation_config = generate_generation_config(parameters, enable_thinking, actual_model)
 
     # 获取凭证信息（用于 project_id 和 session_id）
-    cred_result = await cred_mgr.get_valid_credential(is_antigravity=True)
+    cred_result = await cred_mgr.get_valid_credential(mode="antigravity")
     if not cred_result:
         log.error("当前无可用 antigravity 凭证")
         raise HTTPException(status_code=500, detail="当前无可用 antigravity 凭证")
@@ -1241,6 +1255,10 @@ async def gemini_stream_generate_content(
         tools=antigravity_tools,
         generation_config=generation_config,
     )
+
+    # 图像生成模型特殊处理
+    if "-image" in model:
+        request_body = prepare_image_request(request_body, model)
 
     # 发送流式请求
     try:
@@ -1434,7 +1452,7 @@ async def sdwebui_txt2img(request: Request, _: str = Depends(authenticate_sdwebu
     generation_config = generate_generation_config(parameters, enable_thinking, actual_model)
 
     # 获取凭证信息
-    cred_result = await cred_mgr.get_valid_credential(is_antigravity=True)
+    cred_result = await cred_mgr.get_valid_credential(mode="antigravity")
     if not cred_result:
         log.error("当前无可用 antigravity 凭证")
         raise HTTPException(status_code=500, detail="当前无可用 antigravity 凭证")

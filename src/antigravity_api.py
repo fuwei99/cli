@@ -42,7 +42,7 @@ async def _handle_auto_ban(
         log.warning(
             f"[ANTIGRAVITY AUTO_BAN] Status {status_code} triggers auto-ban for credential: {credential_name}"
         )
-        await credential_manager.set_cred_disabled(credential_name, True, is_antigravity=True)
+        await credential_manager.set_cred_disabled(credential_name, True, mode="antigravity")
 
 
 def build_antigravity_headers(access_token: str) -> Dict[str, str]:
@@ -171,7 +171,7 @@ async def send_antigravity_request_stream(
     for attempt in range(max_retries + 1):
         # 获取可用凭证（传递模型名称）
         cred_result = await credential_manager.get_valid_credential(
-            is_antigravity=True, model_key=model_name
+            mode="antigravity", model_key=model_name
         )
         if not cred_result:
             log.error("[ANTIGRAVITY] No valid credentials available")
@@ -237,12 +237,13 @@ async def send_antigravity_request_stream(
                     False,
                     response.status_code,
                     cooldown_until=cooldown_until,
-                    is_antigravity=True,
+                    mode="antigravity",
                     model_key=model_name  # 传递模型名称用于模型级 CD
                 )
 
                 # 检查自动封禁
-                if await _check_should_auto_ban(response.status_code):
+                should_auto_ban = await _check_should_auto_ban(response.status_code)
+                if should_auto_ban:
                     await _handle_auto_ban(credential_manager, response.status_code, current_file)
 
                 # 清理资源
@@ -252,9 +253,17 @@ async def send_antigravity_request_stream(
                     pass
                 await client.aclose()
 
-                # 重试逻辑
+                # 重试逻辑: 仅对429错误或导致凭证封禁的错误进行重试
+                should_retry = False
                 if retry_enabled and attempt < max_retries:
-                    log.warning(f"[ANTIGRAVITY RETRY] Retrying ({attempt + 1}/{max_retries})")
+                    if should_auto_ban:
+                        log.warning(f"[ANTIGRAVITY RETRY] Retrying with next credential after auto-ban ({attempt + 1}/{max_retries})")
+                        should_retry = True
+                    elif response.status_code == 429:
+                        log.warning(f"[ANTIGRAVITY RETRY] 429 error, retrying ({attempt + 1}/{max_retries})")
+                        should_retry = True
+
+                if should_retry:
                     await asyncio.sleep(retry_interval)
                     continue
 
@@ -298,7 +307,7 @@ async def send_antigravity_request_no_stream(
     for attempt in range(max_retries + 1):
         # 获取可用凭证（传递模型名称）
         cred_result = await credential_manager.get_valid_credential(
-            is_antigravity=True, model_key=model_name
+            mode="antigravity", model_key=model_name
         )
         if not cred_result:
             log.error("[ANTIGRAVITY] No valid credentials available")
@@ -332,7 +341,7 @@ async def send_antigravity_request_no_stream(
                 if response.status_code == 200:
                     log.info(f"[ANTIGRAVITY] Request successful with credential: {current_file}")
                     await credential_manager.record_api_call_result(
-                        current_file, True, is_antigravity=True, model_key=model_name
+                        current_file, True, mode="antigravity", model_key=model_name
                     )
                     response_data = response.json()
 
@@ -373,17 +382,26 @@ async def send_antigravity_request_no_stream(
                     False,
                     response.status_code,
                     cooldown_until=cooldown_until,
-                    is_antigravity=True,
+                    mode="antigravity",
                     model_key=model_name  # 传递模型名称用于模型级 CD
                 )
 
                 # 检查自动封禁
-                if await _check_should_auto_ban(response.status_code):
+                should_auto_ban = await _check_should_auto_ban(response.status_code)
+                if should_auto_ban:
                     await _handle_auto_ban(credential_manager, response.status_code, current_file)
 
-                # 重试逻辑
+                # 重试逻辑: 仅对429错误或导致凭证封禁的错误进行重试
+                should_retry = False
                 if retry_enabled and attempt < max_retries:
-                    log.warning(f"[ANTIGRAVITY RETRY] Retrying ({attempt + 1}/{max_retries})")
+                    if should_auto_ban:
+                        log.warning(f"[ANTIGRAVITY RETRY] Retrying with next credential after auto-ban ({attempt + 1}/{max_retries})")
+                        should_retry = True
+                    elif response.status_code == 429:
+                        log.warning(f"[ANTIGRAVITY RETRY] 429 error, retrying ({attempt + 1}/{max_retries})")
+                        should_retry = True
+
+                if should_retry:
                     await asyncio.sleep(retry_interval)
                     continue
 
@@ -409,7 +427,7 @@ async def fetch_available_models(
         模型列表，格式为字典列表（用于兼容现有代码）
     """
     # 获取可用凭证
-    cred_result = await credential_manager.get_valid_credential(is_antigravity=True)
+    cred_result = await credential_manager.get_valid_credential(mode="antigravity")
     if not cred_result:
         log.error("[ANTIGRAVITY] No valid credentials available for fetching models")
         return []
