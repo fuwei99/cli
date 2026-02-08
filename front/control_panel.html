@@ -1140,6 +1140,185 @@
             gap: 10px;
             justify-content: flex-end;
         }
+
+        /* 消息模态框样式 */
+        .message-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            animation: fadeIn 0.2s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        .message-modal {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .message-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .message-modal.success .message-modal-header {
+            background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+            color: white;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .message-modal.error .message-modal-header {
+            background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+            color: white;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .message-modal.info .message-modal-header {
+            background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+            color: white;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .message-modal-header h3 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .message-modal-close {
+            background: none;
+            border: none;
+            font-size: 28px;
+            cursor: pointer;
+            color: inherit;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .message-modal-close:hover {
+            opacity: 1;
+        }
+
+        .message-modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            line-height: 1.6;
+            color: #333;
+            font-size: 14px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .message-modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .message-modal-btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            background-color: #4285f4;
+            color: white;
+        }
+
+        .message-modal-btn:hover {
+            background-color: #3367d6;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(66, 133, 244, 0.3);
+        }
+
+        /* 消息中的链接样式 */
+        .message-link {
+            color: #1976d2;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 2px 4px;
+            border-radius: 3px;
+            background-color: rgba(25, 118, 210, 0.1);
+            transition: all 0.2s;
+            display: inline-block;
+            word-break: break-all;
+        }
+
+        .message-link:hover {
+            background-color: rgba(25, 118, 210, 0.2);
+            text-decoration: underline;
+            transform: translateY(-1px);
+        }
+
+        .message-link:active {
+            transform: translateY(0);
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .message-modal {
+                max-width: 95%;
+                max-height: 90vh;
+            }
+
+            .message-modal-header {
+                padding: 16px 20px;
+            }
+
+            .message-modal-body {
+                padding: 20px;
+                font-size: 13px;
+            }
+
+            .message-modal-footer {
+                padding: 12px 20px;
+            }
+        }
     </style>
 </head>
 
@@ -1157,8 +1336,17 @@
 
         <!-- 主界面 -->
         <div id="mainSection" class="hidden">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h1 style="margin: 0;">GCLI2API 管理面板</h1>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                    <h1 style="margin: 0;">GCLI2API 管理面板</h1>
+                    <span id="versionInfo" style="font-size: 12px; color: #666;">
+                        <span id="versionText">加载中...</span>
+                    </span>
+                    <button onclick="checkForUpdates()" id="checkUpdateBtn"
+                        style="padding: 4px 12px; background-color: #17a2b8; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; white-space: nowrap;">
+                        检查更新
+                    </button>
+                </div>
                 <button onclick="logout()"
                     style="padding: 8px 20px; background-color: #dc3545; color: white; border: none; border-radius: 5px; font-size: 14px; cursor: pointer;">
                     退出登录
@@ -1476,6 +1664,12 @@
                         <strong style="color: #0c5460;">✅ 检验成功可以恢复403错误</strong>，让凭证重新正常工作。<br>
                         建议在遇到403错误时使用此功能。
                     </p>
+                    <strong>💡 设置预览功能说明：</strong>
+                    <p style="margin: 10px 0;">
+                        点击每个凭证的"设置预览"按钮可以配置Preview通道。<br>
+                        <strong style="color: #0c5460;">✅ 设置预览可以解决部分凭证调用preview模型时404的问题</strong>。<br>
+                        建议在调用gemini-3-pro-preview等模型遇到404错误时使用此功能。
+                    </p>
                 </div>
 
                 <!-- 状态统计 -->
@@ -1517,6 +1711,8 @@
                             disabled>批量删除</button>
                         <button class="batch-btn" style="background-color: #ff9800;" id="batchVerifyBtn"
                             onclick="batchVerifyProjectIds()" disabled>批量检验</button>
+                        <button class="batch-btn" style="background-color: #9c27b0;" id="batchPreviewBtn"
+                            onclick="batchConfigurePreview()" disabled>批量设置预览</button>
                         <button class="batch-btn batch-email" onclick="refreshAllEmails()">刷新所有邮箱</button>
                         <button class="batch-btn" style="background-color: #e91e63;"
                             onclick="deduplicateByEmail()">凭证一键去重</button>
@@ -1546,6 +1742,13 @@
                         <option value="all">全部</option>
                         <option value="in_cooldown">CD中</option>
                         <option value="no_cooldown">未CD</option>
+                    </select>
+
+                    <label for="previewFilter" style="margin-left: 20px;">Preview：</label>
+                    <select id="previewFilter" class="filter-select" onchange="applyStatusFilter()">
+                        <option value="all">全部</option>
+                        <option value="preview">支持</option>
+                        <option value="no_preview">不支持</option>
                     </select>
 
                     <label for="pageSizeSelect" style="margin-left: 20px;">每页显示：</label>
@@ -1883,6 +2086,21 @@
                                     Pro）支持thinking模式，会在生成回答前先输出思考过程。启用后可以看到模型的思考过程；禁用后只显示最终回答，让输出更简洁。
                                 </div>
                             </div>
+
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="antigravityStream2nostream" class="config-checkbox" />
+                                    Antigravity流式转非流式
+                                </label>
+                                <small class="config-note">启用后，非流式请求将使用流式API并收集为完整响应 <span
+                                        style="color: #28a745;">✓ 支持热更新</span></small>
+                                <div class="config-info"
+                                    style="background-color: #f3e5f5; border: 1px solid #9c27b0; color: #4a148c;">
+                                    <strong>🔄 说明：</strong>针对Antigravity模式的优化选项。启用后，即使客户端请求非流式响应，后端也会使用流式API获取数据并收集完整后再返回。
+                                    <br><strong>适用场景：</strong>某些情况下流式API比非流式API更稳定，启用此选项可以提高响应质量。
+                                    <br><strong>默认：</strong>已启用
+                                </div>
+                            </div>
                         </div>
 
                         <div class="config-group">
@@ -2012,23 +2230,6 @@
                             <p><strong>🎛️ 配置灵活：</strong> 支持热更新配置、代理设置</p>
                             <p><strong>📱 界面友好：</strong> 响应式设计、移动端适配</p>
                         </div>
-                    </div>
-                </div>
-
-                <!-- 支持项目 -->
-                <div
-                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 15px; margin: 30px 0; text-align: center; box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);">
-                    <h4 style="margin: 0 0 15px 0; font-size: 24px; font-weight: 600;">💝 支持项目发展</h4>
-                    <p style="margin: 0 0 25px 0; font-size: 16px; opacity: 0.9; line-height: 1.6;">
-                        如果这个项目对您有帮助，欢迎通过币安扫码捐赠支持项目的持续发展！<br>
-                        您的每一份支持都是我们前进的动力 ❤️
-                    </p>
-
-                    <div
-                        style="display: inline-block; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 25px rgba(0,0,0,0.1);">
-                        <img src="docs/币安.jpg" alt="币安捐赠二维码"
-                            style="width: 200px; height: 200px; border-radius: 10px; display: block;">
-                        <p style="color: #666; margin: 12px 0 0 0; font-size: 14px; font-weight: 600;">扫码币安捐赠</p>
                     </div>
                 </div>
 

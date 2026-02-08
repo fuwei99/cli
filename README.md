@@ -1,6 +1,6 @@
 # GeminiCLI to API
 
-**将 GeminiCLI 和 antigravity 转换为 OpenAI 和 GEMINI API 接口**
+**将 GeminiCLI 和 Antigravity 转换为 OpenAI 、GEMINI 和 Claude API 兼容接口**
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: CNC-1.0](https://img.shields.io/badge/License-CNC--1.0-red.svg)](LICENSE)
@@ -36,7 +36,7 @@
 
 ### 🔄 API 端点和格式支持
 
-**多端点双格式支持**
+**多端点多格式支持**
 - **OpenAI 兼容端点**：`/v1/chat/completions` 和 `/v1/models`
   - 支持标准 OpenAI 格式（messages 结构）
   - 支持 Gemini 原生格式（contents 结构）
@@ -45,9 +45,15 @@
 - **Gemini 原生端点**：`/v1/models/{model}:generateContent` 和 `streamGenerateContent`
   - 支持完整的 Gemini 原生 API 规范
   - 多种认证方式：Bearer Token、x-goog-api-key 头部、URL 参数 key
-- **Antigravity API 支持**：同时支持 OpenAI 和 Gemini 格式
+- **Claude 格式兼容**：完整支持 Claude API 格式
+  - 端点：`/v1/messages`（遵循 Claude API 规范）
+  - 支持 Claude 标准的 messages 格式
+  - 支持 system 参数和 Claude 特有功能
+  - 自动转换为后端支持的格式
+- **Antigravity API 支持**：同时支持 OpenAI、Gemini 和 Claude 格式
   - OpenAI 格式端点：`/antigravity/v1/chat/completions`
   - Gemini 格式端点：`/antigravity/v1/models/{model}:generateContent` 和 `streamGenerateContent`
+  - Claude 格式端点：`/antigravity/v1/messages`
   - 支持所有 Antigravity 模型（Claude、Gemini 等）
   - 自动模型名称映射和思维模式检测
 
@@ -74,8 +80,6 @@
 - 实时凭证健康检查
 - 错误码追踪（429、403、500 等）
 - 自动封禁机制（可配置）
-- 凭证轮换策略（基于调用次数）
-- 使用统计和配额监控
 
 ### 🌊 流式传输和响应处理
 
@@ -127,8 +131,6 @@
 **性能和稳定性配置**
 - 429 错误自动重试（可配置间隔和次数）
 - 抗截断最大重试次数
-- 凭证轮换策略
-- 并发请求管理
 
 **日志和调试**
 - 多级日志系统（DEBUG、INFO、WARNING、ERROR）
@@ -317,7 +319,7 @@ ghcr.io/su-kaka/gcli2api:latest
 
 ## ⚠️ 注意事项
 
-- 当前 OAuth 验证流程**仅支持本地主机（localhost）访问**，即须通过 `http://127.0.0.1:7861/auth` 完成认证（默认端口 7861，可通过 PORT 环境变量修改）。
+- 当前 OAuth 验证流程**仅支持本地主机（localhost）访问**，即须通过 `http://127.0.0.1:7861` 完成认证（默认端口 7861，可通过 PORT 环境变量修改）。
 - **如需在云服务器或其他远程环境部署，请先在本地运行服务并完成 OAuth 验证，获得生成的 json 凭证文件（位于 `./geminicli/creds` 目录）后，再在auth面板将该文件上传即可。**
 - **请严格遵守使用限制，仅用于个人学习和非商业用途**
 
@@ -325,7 +327,7 @@ ghcr.io/su-kaka/gcli2api:latest
 
 ## 配置说明
 
-1. 访问 `http://127.0.0.1:7861/auth` （默认端口，可通过 PORT 环境变量修改）
+1. 访问 `http://127.0.0.1:7861` （默认端口，可通过 PORT 环境变量修改）
 2. 完成 OAuth 认证流程（默认密码：`pwd`，可通过环境变量修改）
    - **GCLI 模式**：用于获取 Google Cloud Gemini API 凭证
    - **Antigravity 模式**：用于获取 Google Antigravity API 凭证
@@ -661,9 +663,47 @@ curl -X POST "http://127.0.0.1:7861/v1/models/gemini-2.5-pro:streamGenerateConte
   }'
 ```
 
-#### 3. Antigravity API 端点
+#### 3. Claude API 格式端点
 
-**支持双格式：OpenAI 和 Gemini**
+**端点：** `/v1/messages`
+**认证：** `x-api-key: your_api_password` 或 `Authorization: Bearer your_api_password`
+
+**请求示例：**
+```bash
+curl -X POST "http://127.0.0.1:7861/v1/messages" \
+  -H "x-api-key: your_api_password" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gemini-2.5-pro",
+    "max_tokens": 1024,
+    "messages": [
+      {"role": "user", "content": "Hello, Claude!"}
+    ]
+  }'
+```
+
+**支持 system 参数：**
+```json
+{
+  "model": "gemini-2.5-pro",
+  "max_tokens": 1024,
+  "system": "You are a helpful assistant",
+  "messages": [
+    {"role": "user", "content": "Hello"}
+  ]
+}
+```
+
+**说明：**
+- 完全兼容 Claude API 格式规范
+- 自动转换为 Gemini 格式调用后端
+- 支持 Claude 的所有标准参数
+- 响应格式符合 Claude API 规范
+
+#### 4. Antigravity API 端点
+
+**支持三种格式：OpenAI、Gemini 和 Claude**
 
 ##### Antigravity OpenAI 格式端点
 
@@ -719,12 +759,32 @@ curl -X POST "http://127.0.0.1:7861/antigravity/v1/models/gemini-2.5-flash:strea
   }'
 ```
 
+##### Antigravity Claude 格式端点
+
+**端点：** `/antigravity/v1/messages`
+**认证：** `x-api-key: your_api_password`
+
+**请求示例：**
+```bash
+curl -X POST "http://127.0.0.1:7861/antigravity/v1/messages" \
+  -H "x-api-key: your_api_password" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-sonnet-4-5",
+    "max_tokens": 1024,
+    "messages": [
+      {"role": "user", "content": "Hello"}
+    ]
+  }'
+```
+
 **支持的 Antigravity 模型：**
 - Claude 系列：`claude-sonnet-4-5`、`claude-opus-4-5` 等
 - Gemini 系列：`gemini-2.5-flash`、`gemini-2.5-pro` 等
 - 自动支持思维模型（thinking models）
 
-**Gemini 原生banana：**
+**Gemini 原生示例：**
 ```python
 from io import BytesIO
 from PIL import Image
@@ -773,51 +833,36 @@ for part in response.candidates[0].content.parts:
 
 **认证端点**
 - `POST /auth/login` - 用户登录
-- `POST /auth/start` - 开始 GCLI OAuth 认证
-- `POST /auth/antigravity/start` - 开始 Antigravity OAuth 认证
+- `POST /auth/start` - 开始 OAuth 认证（支持 GCLI 和 Antigravity 模式）
 - `POST /auth/callback` - 处理 OAuth 回调
+- `POST /auth/callback-url` - 从回调 URL 直接完成认证
 - `GET /auth/status/{project_id}` - 检查认证状态
-- `GET /auth/antigravity/credentials` - 获取 Antigravity 凭证
 
-**GCLI 凭证管理端点**
-- `GET /creds/status` - 获取所有 GCLI 凭证状态
-- `POST /creds/action` - 单个 GCLI 凭证操作（启用/禁用/删除）
-- `POST /creds/batch-action` - 批量 GCLI 凭证操作
-- `POST /auth/upload` - 批量上传 GCLI 凭证文件（支持 ZIP）
-- `GET /creds/download/{filename}` - 下载 GCLI 凭证文件
-- `GET /creds/download-all` - 打包下载所有 GCLI 凭证
-- `POST /creds/fetch-email/{filename}` - 获取 GCLI 用户邮箱
-- `POST /creds/refresh-all-emails` - 批量刷新 GCLI 用户邮箱
-
-**Antigravity 凭证管理端点**
-- `GET /antigravity/creds/status` - 获取所有 Antigravity 凭证状态
-- `POST /antigravity/creds/action` - 单个 Antigravity 凭证操作（启用/禁用/删除）
-- `POST /antigravity/creds/batch-action` - 批量 Antigravity 凭证操作
-- `POST /antigravity/auth/upload` - 批量上传 Antigravity 凭证文件（支持 ZIP）
-- `GET /antigravity/creds/download/{filename}` - 下载 Antigravity 凭证文件
-- `GET /antigravity/creds/download-all` - 打包下载所有 Antigravity 凭证
-- `POST /antigravity/creds/fetch-email/{filename}` - 获取 Antigravity 用户邮箱
-- `POST /antigravity/creds/refresh-all-emails` - 批量刷新 Antigravity 用户邮箱
+**凭证管理端点**（支持 `mode=geminicli` 或 `mode=antigravity` 参数）
+- `POST /creds/upload` - 批量上传凭证文件（支持 JSON 和 ZIP）
+- `GET /creds/status` - 获取凭证状态列表（支持分页和筛选）
+- `GET /creds/detail/{filename}` - 获取单个凭证详情
+- `POST /creds/action` - 单个凭证操作（启用/禁用/删除）
+- `POST /creds/batch-action` - 批量凭证操作
+- `GET /creds/download/{filename}` - 下载单个凭证文件
+- `GET /creds/download-all` - 打包下载所有凭证
+- `POST /creds/fetch-email/{filename}` - 获取用户邮箱
+- `POST /creds/refresh-all-emails` - 批量刷新用户邮箱
+- `POST /creds/deduplicate-by-email` - 按邮箱去重凭证
+- `POST /creds/verify-project/{filename}` - 检验凭证 Project ID
+- `GET /creds/quota/{filename}` - 获取凭证额度信息（仅 Antigravity）
 
 **配置管理端点**
 - `GET /config/get` - 获取当前配置
 - `POST /config/save` - 保存配置
 
-**环境变量凭证端点**
-- `POST /auth/load-env-creds` - 加载环境变量凭证
-- `DELETE /auth/env-creds` - 清除环境变量凭证
-- `GET /auth/env-creds-status` - 获取环境变量凭证状态
-
 **日志管理端点**
-- `POST /auth/logs/clear` - 清空日志
-- `GET /auth/logs/download` - 下载日志文件
-- `WebSocket /auth/logs/stream` - 实时日志流
+- `POST /logs/clear` - 清空日志
+- `GET /logs/download` - 下载日志文件
+- `WebSocket /logs/stream` - 实时日志流
 
-**使用统计端点**
-- `GET /usage/stats` - 获取使用统计
-- `GET /usage/aggregated` - 获取聚合统计
-- `POST /usage/update-limits` - 更新使用限制
-- `POST /usage/reset` - 重置使用统计
+**版本信息端点**
+- `GET /version/info` - 获取版本信息（可选 `check_update=true` 参数检查更新）
 
 ### 聊天 API 功能特性
 
@@ -892,14 +937,6 @@ export COMPATIBILITY_MODE=true
 **QQ 群号：937681997**
 
 <img src="docs/qq群.jpg" width="200" alt="QQ群二维码">
-
----
-
-## 支持项目
-
-如果这个项目对您有帮助，欢迎支持项目的持续发展！
-
-详细捐赠信息请查看：[📖 捐赠说明文档](docs/DONATE.md)
 
 ---
 
